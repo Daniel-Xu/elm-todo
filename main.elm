@@ -2,6 +2,8 @@ module Main exposing (..)
 
 import Html exposing (..)
 import Html.Attributes exposing (..)
+import Json.Decode as Json
+import Html.Events exposing (on, keyCode)
 
 
 type alias Todo =
@@ -31,6 +33,26 @@ type Msg
     | Filter FilterState
 
 
+mockTodo : Todo
+mockTodo =
+    { title = "Mock todo"
+    , isCompleted = False
+    , isEditing = False
+    }
+
+
+onEnter : Msg -> Attribute Msg
+onEnter msg =
+    let
+        isEnter code =
+            if code == 13 then
+                Json.succeed msg
+            else
+                Json.fail "Not the right key"
+    in
+        on "keydown" (keyCode |> Json.andThen isEnter)
+
+
 initialModel : Model
 initialModel =
     { todos =
@@ -50,12 +72,23 @@ initialModel =
 
 update : Msg -> Model -> Model
 update msg model =
-    model
+    case msg of
+        Add todo ->
+            { model | todos = todo :: model.todos }
+
+        Delete todo ->
+            model
+
+        Complete todo ->
+            model
+
+        Filter filterState ->
+            model
 
 
 todoView : Todo -> Html Msg
 todoView todo =
-    li [ class "completed" ]
+    li [ classList [ ( "completed", todo.isCompleted ) ] ]
         [ div [ class "view" ]
             [ input [ class "toggle", type_ "checkbox", checked todo.isCompleted ] []
             , label [] [ text todo.title ]
@@ -71,7 +104,14 @@ view model =
         , section [ class "todoapp" ]
             [ header [ class "header" ]
                 [ h1 [] [ text "todos" ]
-                , input [ class "new-todo", placeholder "what needs to be done?", autofocus True ] []
+                , input
+                    [ class "new-todo"
+                    , placeholder "what needs to be done?"
+                    , value model.todo.title
+                    , autofocus True
+                    , onEnter (Add mockTodo)
+                    ]
+                    []
                 ]
             , section [ class "main" ]
                 [ input [ class "toggle-all", type_ "checkbox" ] []
