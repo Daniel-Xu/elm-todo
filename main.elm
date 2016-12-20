@@ -3,13 +3,14 @@ module Main exposing (..)
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Json.Decode as Json
-import Html.Events exposing (on, keyCode)
+import Html.Events exposing (on, keyCode, onInput, onCheck)
 
 
 type alias Todo =
     { title : String
     , isCompleted : Bool
     , isEditing : Bool
+    , identifier : Int
     }
 
 
@@ -23,21 +24,24 @@ type alias Model =
     { todos : List Todo
     , todo : Todo
     , filter : FilterState
+    , nextIdentifier : Int
     }
 
 
 type Msg
-    = Add Todo
-    | Complete Todo
+    = Add
+    | Complete Todo Bool
     | Delete Todo
     | Filter FilterState
+    | UpdateField String
 
 
-mockTodo : Todo
-mockTodo =
-    { title = "Mock todo"
+newTodo : Todo
+newTodo =
+    { title = ""
     , isCompleted = False
     , isEditing = False
+    , identifier = 0
     }
 
 
@@ -59,38 +63,63 @@ initialModel =
         [ { title = "The first todo"
           , isCompleted = False
           , isEditing = False
+          , identifier = 1
           }
         ]
-    , todo =
-        { title = ""
-        , isCompleted = False
-        , isEditing = False
-        }
+    , todo = { newTodo | identifier = 2 }
     , filter = All
+    , nextIdentifier = 3
     }
 
 
 update : Msg -> Model -> Model
 update msg model =
     case msg of
-        Add todo ->
-            { model | todos = todo :: model.todos }
+        Add ->
+            { model
+                | todo = { newTodo | identifier = model.nextIdentifier }
+                , todos = model.todo :: model.todos
+                , nextIdentifier = model.nextIdentifier + 1
+            }
 
         Delete todo ->
             model
 
-        Complete todo ->
-            model
+        Complete todo isChecked ->
+            let
+                updateTodo thisTodo =
+                    if thisTodo.identifier == todo.identifier then
+                        { todo | isCompleted = isChecked }
+                    else
+                        thisTodo
+            in
+                { model | todos = List.map updateTodo model.todos }
 
         Filter filterState ->
             model
+
+        UpdateField text ->
+            let
+                todo =
+                    model.todo
+
+                updatedTodo =
+                    { todo | title = text }
+            in
+                { model | todo = updatedTodo }
 
 
 todoView : Todo -> Html Msg
 todoView todo =
     li [ classList [ ( "completed", todo.isCompleted ) ] ]
         [ div [ class "view" ]
-            [ input [ class "toggle", type_ "checkbox", checked todo.isCompleted ] []
+            [ input
+                [ class "toggle"
+                , type_ "checkbox"
+                , checked todo.isCompleted
+                , onCheck (\isChecked -> Complete todo isChecked)
+                ]
+                []
             , label [] [ text todo.title ]
             , button [ class "destroy" ] []
             ]
@@ -109,7 +138,8 @@ view model =
                     , placeholder "what needs to be done?"
                     , value model.todo.title
                     , autofocus True
-                    , onEnter (Add mockTodo)
+                    , onEnter Add
+                    , onInput UpdateField
                     ]
                     []
                 ]
