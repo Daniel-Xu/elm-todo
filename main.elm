@@ -3,7 +3,7 @@ module Main exposing (..)
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Json.Decode as Json
-import Html.Events exposing (on, keyCode, onInput, onCheck)
+import Html.Events exposing (on, keyCode, onInput, onCheck, onClick)
 
 
 type alias Todo =
@@ -34,6 +34,7 @@ type Msg
     | Delete Todo
     | Filter FilterState
     | UpdateField String
+    | Destroy Todo
 
 
 newTodo : Todo
@@ -72,6 +73,23 @@ initialModel =
     }
 
 
+filteredTodos : Model -> List Todo
+filteredTodos model =
+    let
+        matchesFilter =
+            case model.filter of
+                All ->
+                    (\_ -> True)
+
+                Active ->
+                    (\todo -> todo.isCompleted == False)
+
+                Completed ->
+                    (\todo -> todo.isCompleted == True)
+    in
+        List.filter matchesFilter model.todos
+
+
 update : Msg -> Model -> Model
 update msg model =
     case msg of
@@ -96,7 +114,7 @@ update msg model =
                 { model | todos = List.map updateTodo model.todos }
 
         Filter filterState ->
-            model
+            { model | filter = filterState }
 
         UpdateField text ->
             let
@@ -107,6 +125,9 @@ update msg model =
                     { todo | title = text }
             in
                 { model | todo = updatedTodo }
+
+        Destroy todo ->
+            { model | todos = List.filter (\thisTodo -> thisTodo.identifier /= todo.identifier) model.todos }
 
 
 todoView : Todo -> Html Msg
@@ -121,8 +142,20 @@ todoView todo =
                 ]
                 []
             , label [] [ text todo.title ]
-            , button [ class "destroy" ] []
+            , button [ class "destroy", onClick (Destroy todo) ] []
             ]
+        ]
+
+
+filterItemView : Model -> FilterState -> Html Msg
+filterItemView model filterState =
+    li []
+        [ a
+            [ classList [ ( "selected", (model.filter == filterState) ) ]
+            , href "#"
+            , onClick (Filter filterState)
+            ]
+            [ text (toString filterState) ]
         ]
 
 
@@ -147,7 +180,19 @@ view model =
                 [ input [ class "toggle-all", type_ "checkbox" ] []
                 , label [ for "toggle-all" ] [ text "Mark all as complete" ]
                 , ul [ class "todo-list" ]
-                    (List.map todoView model.todos)
+                    (List.map todoView (filteredTodos model))
+                ]
+            , footer [ class "footer" ]
+                [ span [ class "todo-count" ]
+                    [ strong [] [ text (toString (List.length (List.filter (\todo -> todo.isCompleted == False) model.todos))) ]
+                    , text " item left"
+                    ]
+                , ul [ class "filters" ]
+                    [ filterItemView model All
+                    , filterItemView model Active
+                    , filterItemView model Completed
+                    ]
+                , button [ class "clear-completed" ] [ text "Clear completed" ]
                 ]
             ]
         ]
