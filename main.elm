@@ -35,6 +35,7 @@ type Msg
     | Filter FilterState
     | UpdateField String
     | Destroy Todo
+    | ClearAll
 
 
 newTodo : Todo
@@ -129,6 +130,9 @@ update msg model =
         Destroy todo ->
             { model | todos = List.filter (\thisTodo -> thisTodo.identifier /= todo.identifier) model.todos }
 
+        ClearAll ->
+            { model | todos = List.filter (\thisTodo -> thisTodo.isCompleted == False) model.todos }
+
 
 todoView : Todo -> Html Msg
 todoView todo =
@@ -192,7 +196,11 @@ view model =
                     , filterItemView model Active
                     , filterItemView model Completed
                     ]
-                , button [ class "clear-completed" ] [ text "Clear completed" ]
+                , button
+                    [ class "clear-completed"
+                    , onClick ClearAll
+                    ]
+                    [ text "Clear completed" ]
                 ]
             ]
         ]
