@@ -1,8 +1,9 @@
-module Main exposing (..)
+port module Main exposing (..)
 
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import Json.Decode as Json
+import Json.Decode as Decode
+import Json.Encode
 import Html.Events exposing (on, keyCode, onInput, onCheck, onClick)
 
 
@@ -31,11 +32,11 @@ type alias Model =
 type Msg
     = Add
     | Complete Todo Bool
-    | Delete Todo
     | Filter FilterState
     | UpdateField String
     | Destroy Todo
     | ClearAll
+    | SetModel Model
 
 
 newTodo : Todo
@@ -52,11 +53,11 @@ onEnter msg =
     let
         isEnter code =
             if code == 13 then
-                Json.succeed msg
+                Decode.succeed msg
             else
-                Json.fail "Not the right key"
+                Decode.fail "Not the right key"
     in
-        on "keydown" (keyCode |> Json.andThen isEnter)
+        on "keydown" (keyCode |> Decode.andThen isEnter)
 
 
 initialModel : Model
@@ -91,18 +92,21 @@ filteredTodos model =
         List.filter matchesFilter model.todos
 
 
-update : Msg -> Model -> Model
+update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         Add ->
-            { model
-                | todo = { newTodo | identifier = model.nextIdentifier }
-                , todos = model.todo :: model.todos
-                , nextIdentifier = model.nextIdentifier + 1
-            }
-
-        Delete todo ->
-            model
+            let
+                newModel =
+                    { model
+                        | todo = { newTodo | identifier = model.nextIdentifier }
+                        , todos = model.todo :: model.todos
+                        , nextIdentifier = model.nextIdentifier + 1
+                    }
+            in
+                ( newModel
+                , sendToStorage newModel
+                )
 
         Complete todo isChecked ->
             let
@@ -111,11 +115,20 @@ update msg model =
                         { todo | isCompleted = isChecked }
                     else
                         thisTodo
+
+                newModel =
+                    { model | todos = List.map updateTodo model.todos }
             in
-                { model | todos = List.map updateTodo model.todos }
+                ( newModel
+                , sendToStorage newModel
+                )
 
         Filter filterState ->
-            { model | filter = filterState }
+            let
+                newModel =
+                    { model | filter = filterState }
+            in
+                ( newModel, sendToStorage newModel )
 
         UpdateField text ->
             let
@@ -124,14 +137,32 @@ update msg model =
 
                 updatedTodo =
                     { todo | title = text }
+
+                newModel =
+                    { model | todo = updatedTodo }
             in
-                { model | todo = updatedTodo }
+                ( newModel, sendToStorage newModel )
 
         Destroy todo ->
-            { model | todos = List.filter (\thisTodo -> thisTodo.identifier /= todo.identifier) model.todos }
+            let
+                newModel =
+                    { model | todos = List.filter (\thisTodo -> thisTodo.identifier /= todo.identifier) model.todos }
+            in
+                ( newModel
+                , sendToStorage newModel
+                )
 
         ClearAll ->
-            { model | todos = List.filter (\thisTodo -> thisTodo.isCompleted == False) model.todos }
+            let
+                newModel =
+                    { model | todos = List.filter (\thisTodo -> thisTodo.isCompleted == False) model.todos }
+            in
+                ( newModel
+                , sendToStorage newModel
+                )
+
+        SetModel newModel ->
+            ( newModel, Cmd.none )
 
 
 todoView : Todo -> Html Msg
@@ -206,12 +237,72 @@ view model =
         ]
 
 
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    Sub.none
+
+
+encodeJson : Model -> Json.Encode.Value
+encodeJson model =
+    Json.Encode.object
+        [ ( "todos", Json.Encode.list (List.map encodeTodo model.todos) )
+        , ( "todo", encodeTodo model.todo )
+        , ( "filter", encodeFilterState model.filter )
+        , ( "nextIdentifier", Json.Encode.int model.nextIdentifier )
+        ]
+
+
+encodeTodo : Todo -> Json.Encode.Value
+encodeTodo todo =
+    Json.Encode.object
+        [ ( "title", Json.Encode.string todo.title )
+        , ( "isCompleted", Json.Encode.bool todo.isCompleted )
+        , ( "isEditing", Json.Encode.bool todo.isEditing )
+        , ( "identifier", Json.Encode.int todo.identifier )
+        ]
+
+
+encodeFilterState : FilterState -> Json.Encode.Value
+encodeFilterState filterState =
+    Json.Encode.string (toString filterState)
+
+
+sendToStorage : Model -> Cmd Msg
+sendToStorage model =
+    encodeJson model |> storage
+
+
+port storage : Json.Encode.Value -> Cmd msg
+
+
+
+-- mapStorageInput : Decode.Value -> Msg
+-- mapStorageInput modelJson =
+--     case (decodeModel modelJson) of
+--         Ok model ->
+--             SetModel model
+--         Err errorMessage ->
+--             let
+--                 _ =
+--                     Debug.log "Error in mapStorageInput:" errorMessage
+--             in
+--                 NoOp
+-- decodeModel : Decode.Value -> Result String Model
+-- modelDecoder :
+-- todoDecoder
+-- filterStateDecoder
+
+
+port storageInput : (Decode.Value -> msg) -> Sub msg
+
+
 main : Program Never Model Msg
 main =
-    Html.beginnerProgram
-        { model = initialModel
+    Html.program
+        { init = ( initialModel, Cmd.none )
         , update = update
         , view = view
+        , subscriptions = subscriptions
         }
 
 
