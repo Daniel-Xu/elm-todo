@@ -1,10 +1,11 @@
 port module Main exposing (..)
 
 import Html exposing (..)
-import Html.Attributes exposing (..)
+import Html.Attributes exposing (class, autofocus, placeholder, classList, checked, href, rel, type_, value, for)
 import Json.Decode as Decode
 import Json.Encode
 import Html.Events exposing (on, keyCode, onInput, onCheck, onClick)
+import Json.Decode.Pipeline exposing (decode, required)
 
 
 type alias Todo =
@@ -300,20 +301,20 @@ decodeModel modelJson =
 
 modelDecoder : Decode.Decoder Model
 modelDecoder =
-    Decode.map4 Model
-        (Decode.field "todos" (Decode.list todoDecoder))
-        (Decode.field "todo" todoDecoder)
-        (Decode.field "filter" (Decode.string |> Decode.map filterStateDecoder))
-        (Decode.field "nextIdentifier" Decode.int)
+    decode Model
+        |> required "todos" (Decode.list todoDecoder)
+        |> required "todo" todoDecoder
+        |> required "filter" (Decode.string |> Decode.map filterStateDecoder)
+        |> required "nextIdentifier" Decode.int
 
 
 todoDecoder : Decode.Decoder Todo
 todoDecoder =
-    Decode.map4 Todo
-        (Decode.field "title" Decode.string)
-        (Decode.field "isCompleted" Decode.bool)
-        (Decode.field "isEditing" Decode.bool)
-        (Decode.field "identifier" Decode.int)
+    decode Todo
+        |> required "title" Decode.string
+        |> required "isCompleted" Decode.bool
+        |> required "isEditing" Decode.bool
+        |> required "identifier" Decode.int
 
 
 filterStateDecoder : String -> FilterState
