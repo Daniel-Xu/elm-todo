@@ -37,6 +37,7 @@ type Msg
     | Destroy Todo
     | ClearAll
     | SetModel Model
+    | NoOp
 
 
 newTodo : Todo
@@ -164,6 +165,9 @@ update msg model =
         SetModel newModel ->
             ( newModel, Cmd.none )
 
+        NoOp ->
+            ( model, Cmd.none )
+
 
 todoView : Todo -> Html Msg
 todoView todo =
@@ -239,7 +243,7 @@ view model =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Sub.none
+    storageInput mapStorageInput
 
 
 encodeJson : Model -> Json.Encode.Value
@@ -275,22 +279,64 @@ sendToStorage model =
 port storage : Json.Encode.Value -> Cmd msg
 
 
+mapStorageInput : Decode.Value -> Msg
+mapStorageInput modelJson =
+    case (decodeModel modelJson) of
+        Ok model ->
+            SetModel model
 
--- mapStorageInput : Decode.Value -> Msg
--- mapStorageInput modelJson =
---     case (decodeModel modelJson) of
---         Ok model ->
---             SetModel model
---         Err errorMessage ->
---             let
---                 _ =
---                     Debug.log "Error in mapStorageInput:" errorMessage
---             in
---                 NoOp
--- decodeModel : Decode.Value -> Result String Model
--- modelDecoder :
--- todoDecoder
--- filterStateDecoder
+        Err errorMessage ->
+            let
+                _ =
+                    Debug.log "Error in mapStorageInput:" errorMessage
+            in
+                NoOp
+
+
+decodeModel : Decode.Value -> Result String Model
+decodeModel modelJson =
+    Decode.decodeValue modelDecoder modelJson
+
+
+modelDecoder : Decode.Decoder Model
+modelDecoder =
+    Decode.map4 Model
+        (Decode.field "todos" (Decode.list todoDecoder))
+        (Decode.field "todo" todoDecoder)
+        (Decode.field "filter" (Decode.string |> Decode.map filterStateDecoder))
+        (Decode.field "nextIdentifier" Decode.int)
+
+
+todoDecoder : Decode.Decoder Todo
+todoDecoder =
+    Decode.map4 Todo
+        (Decode.field "title" Decode.string)
+        (Decode.field "isCompleted" Decode.bool)
+        (Decode.field "isEditing" Decode.bool)
+        (Decode.field "identifier" Decode.int)
+
+
+filterStateDecoder : String -> FilterState
+filterStateDecoder filter =
+    case filter of
+        "All" ->
+            All
+
+        "Active" ->
+            Active
+
+        "Completed" ->
+            Completed
+
+        _ ->
+            let
+                _ =
+                    Debug.log "filterStateDecoder" <|
+                        "Couldn't decode value "
+                            ++ filter
+                            ++ " so defaulting to All."
+            in
+                All
 
 
 port storageInput : (Decode.Value -> msg) -> Sub msg
@@ -438,7 +484,7 @@ styles =
     }
 
     .toggle-all:before {
-    content: '❯';
+    content: '>';
     font-size: 22px;
     color: #e6e6e6;
     padding: 10px 27px 10px 27px;
@@ -536,7 +582,7 @@ styles =
     }
 
     .todo-list li .destroy:after {
-    content: '×';
+    content: 'x';
     }
 
     .todo-list li:hover .destroy {
